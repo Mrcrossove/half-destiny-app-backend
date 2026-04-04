@@ -4,8 +4,26 @@ import {
   createDeletionRequest,
   getDeletionStatusPayload
 } from '../services/user/deletionService';
-import { getProfilePayload, updateProfile as saveProfile } from '../services/user/profileService';
+import { getProfileBundle, getProfilePayload, updateProfile as saveProfile } from '../services/user/profileService';
+import { isOwnedPhotoKey, isRemoteUrl, normalizeStoredPhotoValue, uploadPhotoToOss } from '../services/common/ossService';
 import type { AuthenticatedRequest } from '../middleware/auth';
+
+type PhotoUploadRequest = AuthenticatedRequest & {
+  file?: Express.Multer.File;
+};
+
+function parsePhotoSlot(value: unknown) {
+  if (value === undefined || value === null || value === '') return undefined;
+  const numeric = Number(value);
+  if (!Number.isInteger(numeric) || numeric < 0 || numeric > 8) {
+    throw new Error('slot must be an integer between 0 and 8');
+  }
+  return numeric;
+}
+
+function compactPhotoSet(items: string[]) {
+  return items.map((item) => String(item || '').trim()).filter(Boolean).slice(0, 9);
+}
 
 export async function getProfile(req: AuthenticatedRequest, res: Response) {
   try {
@@ -59,22 +77,115 @@ export async function updateProfile(req: AuthenticatedRequest, res: Response) {
   }
 }
 
-export async function uploadPhoto(req: AuthenticatedRequest, res: Response) {
-  return res.status(501).json({
-    success: false,
-    code: 'NOT_IMPLEMENTED',
-    message: 'Photo upload is not implemented yet',
-    draft_request: req.body
-  });
+export async function uploadPhoto(req: PhotoUploadRequest, res: Response) {
+  try {
+    const userId = String(req.user?.id || '').trim();
+    if (!userId) {
+      return res.status(401).json({ success: false, code: 'AUTH_TOKEN_INVALID', message: 'Invalid token' });
+    }
+    if (!req.file) {
+      return res.status(400).json({ success: false, code: 'PHOTO_FILE_MISSING', message: 'Photo file is required' });
+    }
+
+    const slot = parsePhotoSlot(req.body?.slot);
+    const uploaded = await uploadPhotoToOss({
+      userId,
+      buffer: req.file.buffer,
+      mimeType: req.file.mimetype,
+      originalName: req.file.originalname
+    });
+
+    const bundle = await getProfileBundle(userId);
+    if (!bundle) {
+      return res.status(404).json({ success: false, code: 'USER_NOT_FOUND', message: 'User not found' });
+    }
+
+    const profile = (bundle as { profile?: { avatar_url?: string | null; photos?: string[] | null } }).profile;
+    const orderedPhotos = compactPhotoSet([
+      String(profile?.avatar_url || '').trim(),
+      ...((profile?.photos || []).map((item) => String(item || '').trim()))
+    ]);
+
+    if (slot === undefined || slot >= orderedPhotos.length) {
+      orderedPhotos.push(uploaded.key);
+    } else {
+      orderedPhotos[slot] = uploaded.key;
+    }
+
+    const nextPhotos = compactPhotoSet(orderedPhotos);
+    const nextProfile = await saveProfile(userId, {
+      avatar: nextPhotos[0] || '',
+      photos: nextPhotos.slice(1)
+    });
+
+    return res.json({
+      success: true,
+      data: {
+        key: uploaded.key,
+        url: uploaded.url,
+        profile: nextProfile
+      }
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Photo upload failed';
+    const isValidationError =
+      message.includes('slot must be') ||
+      message.includes('OSS is not fully configured');
+
+    return res.status(isValidationError ? 400 : 500).json({
+      success: false,
+      code: isValidationError ? 'PHOTO_UPLOAD_INVALID_PARAMS' : 'PHOTO_UPLOAD_FAILED',
+      message
+    });
+  }
 }
 
 export async function replacePhotos(req: AuthenticatedRequest, res: Response) {
-  return res.status(501).json({
-    success: false,
-    code: 'NOT_IMPLEMENTED',
-    message: 'Photo replacement is not implemented yet',
-    draft_request: req.body
-  });
+  try {
+    const userId = String(req.user?.id || '').trim();
+    const incoming = Array.isArray(req.body?.photos) ? req.body.photos : null;
+
+    if (!incoming) {
+      return res.status(400).json({
+        success: false,
+        code: 'PHOTO_REPLACE_INVALID_PARAMS',
+        message: 'photos must be an array'
+      });
+    }
+
+    const normalizedPhotos = compactPhotoSet(
+      incoming.map((item: unknown) => normalizeStoredPhotoValue(item))
+    );
+
+    for (const item of normalizedPhotos) {
+      if (!item) continue;
+      if (isRemoteUrl(item)) continue;
+      if (!isOwnedPhotoKey(userId, item)) {
+        return res.status(400).json({
+          success: false,
+          code: 'PHOTO_REPLACE_INVALID_PARAMS',
+          message: 'photos must belong to the authenticated user'
+        });
+      }
+    }
+
+    const profile = await saveProfile(userId, {
+      avatar: normalizedPhotos[0] || '',
+      photos: normalizedPhotos.slice(1)
+    });
+
+    return res.json({
+      success: true,
+      data: profile
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Photo replacement failed';
+    return res.status(500).json({
+      success: false,
+      code: 'PHOTO_REPLACE_FAILED',
+      message
+    });
+  }
 }
 
 export async function requestAccountDeletion(req: AuthenticatedRequest, res: Response) {

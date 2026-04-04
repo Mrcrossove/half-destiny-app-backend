@@ -1,4 +1,5 @@
 import { User, UserProfile } from '../../models';
+import { normalizeStoredPhotoValue, signPhotoUrl } from '../common/ossService';
 
 const GENDER_VALUES = new Set(['', 'male', 'female', 'other']);
 
@@ -69,6 +70,10 @@ function normalizeTextArray(value: unknown) {
     result.push(text);
   });
   return result;
+}
+
+function mapPhotoArrayForOutput(value: unknown) {
+  return normalizeTextArray(value).map((item) => signPhotoUrl(item));
 }
 
 function calculateAge(value: Date | string | null) {
@@ -148,14 +153,14 @@ export function serializeProfile(user: User, profile: UserProfile | null): Profi
     age: calculateAge(profile?.birth_date || null),
     birthplace: normalizeNullableText(profile?.birthplace),
     bio: normalizeNullableText(profile?.bio),
-    avatar: normalizeNullableText(profile?.avatar_url),
+    avatar: signPhotoUrl(profile?.avatar_url),
     height: profile?.height_cm ?? null,
     job: normalizeNullableText(profile?.job),
     school: normalizeNullableText(profile?.school),
     mbti: normalizeNullableText(profile?.mbti),
     constellation: normalizeNullableText(profile?.constellation),
     interests: normalizeTextArray(profile?.interests || []),
-    photos: normalizeTextArray(profile?.photos || []),
+    photos: mapPhotoArrayForOutput(profile?.photos || []),
     profileCompleted: Boolean(profile?.profile_completed)
   };
 }
@@ -238,7 +243,7 @@ export async function updateProfile(userId: string, input: UpdateProfileInput) {
   const avatar = stringifyOptional(input.avatar);
   if (avatar !== undefined) {
     assertLength(avatar, 500, 'avatar');
-    updates.avatar_url = avatar || null;
+    updates.avatar_url = avatar ? normalizeStoredPhotoValue(avatar) : null;
   }
 
   const height = parseHeight(input.height);
@@ -277,7 +282,7 @@ export async function updateProfile(userId: string, input: UpdateProfileInput) {
 
   const photos = parseStringArray(input.photos, 'photos', 9, 500);
   if (photos !== undefined) {
-    updates.photos = photos;
+    updates.photos = photos.map((item) => normalizeStoredPhotoValue(item)).filter(Boolean);
   }
 
   if (Object.keys(updates).length > 0) {
