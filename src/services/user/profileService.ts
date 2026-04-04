@@ -8,9 +8,17 @@ export interface ProfilePayload {
   nickname: string;
   gender: string;
   birthday: string;
+  age: number | null;
   birthplace: string;
   bio: string;
   avatar: string;
+  height: number | null;
+  job: string;
+  school: string;
+  mbti: string;
+  constellation: string;
+  interests: string[];
+  photos: string[];
   profileCompleted: boolean;
 }
 
@@ -21,6 +29,13 @@ interface UpdateProfileInput {
   birthplace?: unknown;
   bio?: unknown;
   avatar?: unknown;
+  height?: unknown;
+  job?: unknown;
+  school?: unknown;
+  mbti?: unknown;
+  constellation?: unknown;
+  interests?: unknown;
+  photos?: unknown;
 }
 
 function stringifyOptional(value: unknown) {
@@ -40,6 +55,36 @@ function formatBirthday(value: Date | string | null) {
 
 function normalizeNullableText(value: string | null | undefined) {
   return value || '';
+}
+
+function normalizeTextArray(value: unknown) {
+  if (!Array.isArray(value)) return [];
+
+  const result: string[] = [];
+  const seen = new Set<string>();
+  value.forEach((item) => {
+    const text = String(item || '').trim();
+    if (!text || seen.has(text)) return;
+    seen.add(text);
+    result.push(text);
+  });
+  return result;
+}
+
+function calculateAge(value: Date | string | null) {
+  if (!value) return null;
+
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+
+  const now = new Date();
+  let age = now.getFullYear() - date.getFullYear();
+  const monthDelta = now.getMonth() - date.getMonth();
+  if (monthDelta < 0 || (monthDelta === 0 && now.getDate() < date.getDate())) {
+    age -= 1;
+  }
+
+  return age >= 0 ? age : null;
 }
 
 function computeProfileCompleted(profile: UserProfile) {
@@ -66,6 +111,33 @@ function parseBirthday(value: string) {
   return date;
 }
 
+function parseHeight(value: unknown) {
+  if (value === undefined || value === null || value === '') return undefined;
+
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || !Number.isInteger(numeric)) {
+    throw new Error('height must be an integer');
+  }
+  if (numeric < 120 || numeric > 250) {
+    throw new Error('height must be between 120 and 250');
+  }
+  return numeric;
+}
+
+function parseStringArray(value: unknown, field: string, maxItems: number, maxItemLength: number) {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) {
+    throw new Error(`${field} must be an array`);
+  }
+
+  const items = normalizeTextArray(value);
+  if (items.length > maxItems) {
+    throw new Error(`${field} exceeds maximum item count of ${maxItems}`);
+  }
+  items.forEach((item) => assertLength(item, maxItemLength, `${field} item`));
+  return items;
+}
+
 export function serializeProfile(user: User, profile: UserProfile | null): ProfilePayload {
   return {
     id: user.id,
@@ -73,9 +145,17 @@ export function serializeProfile(user: User, profile: UserProfile | null): Profi
     nickname: profile?.nickname || '',
     gender: profile?.gender || '',
     birthday: formatBirthday(profile?.birth_date || null),
+    age: calculateAge(profile?.birth_date || null),
     birthplace: normalizeNullableText(profile?.birthplace),
     bio: normalizeNullableText(profile?.bio),
     avatar: normalizeNullableText(profile?.avatar_url),
+    height: profile?.height_cm ?? null,
+    job: normalizeNullableText(profile?.job),
+    school: normalizeNullableText(profile?.school),
+    mbti: normalizeNullableText(profile?.mbti),
+    constellation: normalizeNullableText(profile?.constellation),
+    interests: normalizeTextArray(profile?.interests || []),
+    photos: normalizeTextArray(profile?.photos || []),
     profileCompleted: Boolean(profile?.profile_completed)
   };
 }
@@ -114,6 +194,13 @@ export async function updateProfile(userId: string, input: UpdateProfileInput) {
     birthplace: string | null;
     bio: string | null;
     avatar_url: string | null;
+    height_cm: number | null;
+    job: string | null;
+    school: string | null;
+    mbti: string | null;
+    constellation: string | null;
+    interests: string[];
+    photos: string[];
     profile_completed: boolean;
   }> = {};
 
@@ -152,6 +239,45 @@ export async function updateProfile(userId: string, input: UpdateProfileInput) {
   if (avatar !== undefined) {
     assertLength(avatar, 500, 'avatar');
     updates.avatar_url = avatar || null;
+  }
+
+  const height = parseHeight(input.height);
+  if (height !== undefined) {
+    updates.height_cm = height;
+  }
+
+  const job = stringifyOptional(input.job);
+  if (job !== undefined) {
+    assertLength(job, 120, 'job');
+    updates.job = job || null;
+  }
+
+  const school = stringifyOptional(input.school);
+  if (school !== undefined) {
+    assertLength(school, 160, 'school');
+    updates.school = school || null;
+  }
+
+  const mbti = stringifyOptional(input.mbti);
+  if (mbti !== undefined) {
+    assertLength(mbti, 16, 'mbti');
+    updates.mbti = mbti ? mbti.toUpperCase() : null;
+  }
+
+  const constellation = stringifyOptional(input.constellation);
+  if (constellation !== undefined) {
+    assertLength(constellation, 32, 'constellation');
+    updates.constellation = constellation || null;
+  }
+
+  const interests = parseStringArray(input.interests, 'interests', 8, 24);
+  if (interests !== undefined) {
+    updates.interests = interests;
+  }
+
+  const photos = parseStringArray(input.photos, 'photos', 9, 500);
+  if (photos !== undefined) {
+    updates.photos = photos;
   }
 
   if (Object.keys(updates).length > 0) {

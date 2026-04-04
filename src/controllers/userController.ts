@@ -44,8 +44,12 @@ export async function updateProfile(req: AuthenticatedRequest, res: Response) {
     const message = error instanceof Error ? error.message : 'Update profile failed';
     const isValidationError =
       message.includes('maximum length') ||
+      message.includes('maximum item count') ||
       message.includes('must be one of') ||
-      message.includes('valid date');
+      message.includes('valid date') ||
+      message.includes('must be an array') ||
+      message.includes('must be an integer') ||
+      message.includes('must be between');
 
     return res.status(isValidationError ? 400 : 500).json({
       success: false,
