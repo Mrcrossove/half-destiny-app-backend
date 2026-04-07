@@ -9,6 +9,7 @@ export interface ProfilePayload {
   nickname: string;
   gender: string;
   birthday: string;
+  birthTime: string;
   age: number | null;
   birthplace: string;
   bio: string;
@@ -21,12 +22,21 @@ export interface ProfilePayload {
   interests: string[];
   photos: string[];
   profileCompleted: boolean;
+  currentLuckPillar: string;
+  yearPillar: string;
+  monthPillar: string;
+  dayPillar: string;
+  hourPillar: string;
+  dayElement: string;
+  bodyStrength: string;
+  baziReport: string;
 }
 
 interface UpdateProfileInput {
   nickname?: unknown;
   gender?: unknown;
   birthday?: unknown;
+  birthTime?: unknown;
   birthplace?: unknown;
   bio?: unknown;
   avatar?: unknown;
@@ -97,6 +107,7 @@ function computeProfileCompleted(profile: UserProfile) {
     profile.nickname &&
       profile.gender &&
       profile.birth_date &&
+      profile.birth_time &&
       profile.birthplace
   );
 }
@@ -150,6 +161,7 @@ export function serializeProfile(user: User, profile: UserProfile | null): Profi
     nickname: profile?.nickname || '',
     gender: profile?.gender || '',
     birthday: formatBirthday(profile?.birth_date || null),
+    birthTime: normalizeNullableText(profile?.birth_time),
     age: calculateAge(profile?.birth_date || null),
     birthplace: normalizeNullableText(profile?.birthplace),
     bio: normalizeNullableText(profile?.bio),
@@ -161,7 +173,15 @@ export function serializeProfile(user: User, profile: UserProfile | null): Profi
     constellation: normalizeNullableText(profile?.constellation),
     interests: normalizeTextArray(profile?.interests || []),
     photos: mapPhotoArrayForOutput(profile?.photos || []),
-    profileCompleted: Boolean(profile?.profile_completed)
+    profileCompleted: Boolean(profile?.profile_completed),
+    currentLuckPillar: normalizeNullableText(profile?.current_luck_pillar),
+    yearPillar: normalizeNullableText(profile?.year_pillar),
+    monthPillar: normalizeNullableText(profile?.month_pillar),
+    dayPillar: normalizeNullableText(profile?.day_pillar),
+    hourPillar: normalizeNullableText(profile?.hour_pillar),
+    dayElement: normalizeNullableText(profile?.day_element),
+    bodyStrength: normalizeNullableText(profile?.body_strength),
+    baziReport: normalizeNullableText(profile?.bazi_report)
   };
 }
 
@@ -196,6 +216,7 @@ export async function updateProfile(userId: string, input: UpdateProfileInput) {
     nickname: string;
     gender: string;
     birth_date: Date | null;
+    birth_time: string | null;
     birthplace: string | null;
     bio: string | null;
     avatar_url: string | null;
@@ -207,6 +228,7 @@ export async function updateProfile(userId: string, input: UpdateProfileInput) {
     interests: string[];
     photos: string[];
     profile_completed: boolean;
+    current_luck_pillar: string | null;
   }> = {};
 
   const nickname = stringifyOptional(input.nickname);
@@ -226,6 +248,12 @@ export async function updateProfile(userId: string, input: UpdateProfileInput) {
   const birthday = stringifyOptional(input.birthday);
   if (birthday !== undefined) {
     updates.birth_date = parseBirthday(birthday);
+  }
+
+  const birthTime = stringifyOptional(input.birthTime);
+  if (birthTime !== undefined) {
+    assertLength(birthTime, 16, 'birthTime');
+    updates.birth_time = birthTime || null;
   }
 
   const birthplace = stringifyOptional(input.birthplace);

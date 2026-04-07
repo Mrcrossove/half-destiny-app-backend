@@ -1,6 +1,11 @@
 import { Response } from 'express';
-import { getBaziPlaceholder } from '../services/content/baziService';
 import { getRecommendationsForUser } from '../services/content/recommendationService';
+import {
+  getCompatibilityMetaphysics,
+  getDayunMetaphysics,
+  getLiunianMetaphysics,
+  getPersonalMetaphysics
+} from '../services/content/metaphysicsService';
 import type { AuthenticatedRequest } from '../middleware/auth';
 
 export async function getRecommendations(req: AuthenticatedRequest, res: Response) {
@@ -9,18 +14,75 @@ export async function getRecommendations(req: AuthenticatedRequest, res: Respons
   return res.json({ success: true, data: items });
 }
 
-export async function getPersonalReport(_req: AuthenticatedRequest, res: Response) {
-  return res.json({ success: true, data: await getBaziPlaceholder('personal') });
+function toMessage(error: unknown) {
+  return error instanceof Error ? error.message : 'Metaphysics service failed';
 }
 
-export async function getCompatibilityReport(_req: AuthenticatedRequest, res: Response) {
-  return res.json({ success: true, data: await getBaziPlaceholder('compatibility') });
+function toStatusCode(message: string) {
+  if (
+    message.includes('required') ||
+    message.includes('incomplete') ||
+    message.includes('target')
+  ) {
+    return 400;
+  }
+  return 500;
 }
 
-export async function getDayunReport(_req: AuthenticatedRequest, res: Response) {
-  return res.json({ success: true, data: await getBaziPlaceholder('dayun') });
+export async function getPersonalReport(req: AuthenticatedRequest, res: Response) {
+  try {
+    const userId = String(req.user?.id || '').trim();
+    const data = await getPersonalMetaphysics(userId);
+    return res.json({ success: true, data });
+  } catch (error) {
+    const message = toMessage(error);
+    return res.status(toStatusCode(message)).json({ success: false, message });
+  }
 }
 
-export async function getLiunianReport(_req: AuthenticatedRequest, res: Response) {
-  return res.json({ success: true, data: await getBaziPlaceholder('liunian') });
+export async function getCompatibilityReport(req: AuthenticatedRequest, res: Response) {
+  try {
+    const userId = String(req.user?.id || '').trim();
+    const body = (req.body || {}) as {
+      target_user_id?: string;
+      manual_target?: {
+        gender?: string;
+        yearPillar?: string;
+        monthPillar?: string;
+        dayPillar?: string;
+        hourPillar?: string;
+      };
+    };
+    const data = await getCompatibilityMetaphysics({
+      userId,
+      targetUserId: String(body.target_user_id || '').trim() || undefined,
+      manualTarget: body.manual_target || null
+    });
+    return res.json({ success: true, data });
+  } catch (error) {
+    const message = toMessage(error);
+    return res.status(toStatusCode(message)).json({ success: false, message });
+  }
+}
+
+export async function getDayunReport(req: AuthenticatedRequest, res: Response) {
+  try {
+    const userId = String(req.user?.id || '').trim();
+    const data = await getDayunMetaphysics(userId);
+    return res.json({ success: true, data });
+  } catch (error) {
+    const message = toMessage(error);
+    return res.status(toStatusCode(message)).json({ success: false, message });
+  }
+}
+
+export async function getLiunianReport(req: AuthenticatedRequest, res: Response) {
+  try {
+    const userId = String(req.user?.id || '').trim();
+    const data = await getLiunianMetaphysics(userId);
+    return res.json({ success: true, data });
+  } catch (error) {
+    const message = toMessage(error);
+    return res.status(toStatusCode(message)).json({ success: false, message });
+  }
 }

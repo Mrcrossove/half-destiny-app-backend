@@ -7,6 +7,7 @@ interface UserProfileAttributes {
   nickname: string;
   gender: string;
   birth_date: Date | null;
+  birth_time: string | null;
   birthplace: string | null;
   bio: string | null;
   avatar_url: string | null;
@@ -18,13 +19,22 @@ interface UserProfileAttributes {
   interests: string[];
   photos: string[];
   profile_completed: boolean;
+  current_luck_pillar: string | null;
+  year_pillar: string | null;
+  month_pillar: string | null;
+  day_pillar: string | null;
+  hour_pillar: string | null;
+  day_element: string | null;
+  body_strength: string | null;
+  bazi_report: string | null;
+  last_bazi_calculated_at: Date | null;
   created_at?: Date;
   updated_at?: Date;
 }
 
 type UserProfileCreationAttributes = Optional<
   UserProfileAttributes,
-  'id' | 'birth_date' | 'birthplace' | 'bio' | 'avatar_url' | 'height_cm' | 'job' | 'school' | 'mbti' | 'constellation' | 'interests' | 'photos' | 'profile_completed'
+  'id' | 'birth_date' | 'birth_time' | 'birthplace' | 'bio' | 'avatar_url' | 'height_cm' | 'job' | 'school' | 'mbti' | 'constellation' | 'interests' | 'photos' | 'profile_completed' | 'current_luck_pillar' | 'year_pillar' | 'month_pillar' | 'day_pillar' | 'hour_pillar' | 'day_element' | 'body_strength' | 'bazi_report' | 'last_bazi_calculated_at'
 >;
 
 export class UserProfile extends Model<UserProfileAttributes, UserProfileCreationAttributes> implements UserProfileAttributes {
@@ -33,6 +43,7 @@ export class UserProfile extends Model<UserProfileAttributes, UserProfileCreatio
   public nickname!: string;
   public gender!: string;
   public birth_date!: Date | null;
+  public birth_time!: string | null;
   public birthplace!: string | null;
   public bio!: string | null;
   public avatar_url!: string | null;
@@ -44,6 +55,15 @@ export class UserProfile extends Model<UserProfileAttributes, UserProfileCreatio
   public interests!: string[];
   public photos!: string[];
   public profile_completed!: boolean;
+  public current_luck_pillar!: string | null;
+  public year_pillar!: string | null;
+  public month_pillar!: string | null;
+  public day_pillar!: string | null;
+  public hour_pillar!: string | null;
+  public day_element!: string | null;
+  public body_strength!: string | null;
+  public bazi_report!: string | null;
+  public last_bazi_calculated_at!: Date | null;
   public readonly created_at!: Date;
   public readonly updated_at!: Date;
 }
@@ -72,6 +92,10 @@ UserProfile.init(
     },
     birth_date: {
       type: DataTypes.DATE,
+      allowNull: true
+    },
+    birth_time: {
+      type: DataTypes.STRING(16),
       allowNull: true
     },
     birthplace: {
@@ -120,6 +144,42 @@ UserProfile.init(
       type: DataTypes.BOOLEAN,
       allowNull: false,
       defaultValue: false
+    },
+    current_luck_pillar: {
+      type: DataTypes.STRING(16),
+      allowNull: true
+    },
+    year_pillar: {
+      type: DataTypes.STRING(16),
+      allowNull: true
+    },
+    month_pillar: {
+      type: DataTypes.STRING(16),
+      allowNull: true
+    },
+    day_pillar: {
+      type: DataTypes.STRING(16),
+      allowNull: true
+    },
+    hour_pillar: {
+      type: DataTypes.STRING(16),
+      allowNull: true
+    },
+    day_element: {
+      type: DataTypes.STRING(16),
+      allowNull: true
+    },
+    body_strength: {
+      type: DataTypes.STRING(32),
+      allowNull: true
+    },
+    bazi_report: {
+      type: DataTypes.TEXT,
+      allowNull: true
+    },
+    last_bazi_calculated_at: {
+      type: DataTypes.DATE,
+      allowNull: true
     }
   },
   {
