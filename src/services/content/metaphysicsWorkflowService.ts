@@ -2,25 +2,48 @@ import { env } from '../../config/env';
 
 type WorkflowType = 'personal' | 'compatibility' | 'dayun';
 
+function resolveWorkflowConfig(type: WorkflowType) {
+  if (type === 'dayun') {
+    return {
+      url: env.dayunApiUrl,
+      key: env.dayunApiKey,
+      missingKeyName: 'DAYUN_API_KEY'
+    };
+  }
+
+  if (type === 'compatibility') {
+    return {
+      url: env.compatibilityApiUrl,
+      key: env.compatibilityApiKey,
+      missingKeyName: 'COMPATIBILITY_API_KEY'
+    };
+  }
+
+  return {
+    url: env.murronApiUrl,
+    key: env.murronApiKey,
+    missingKeyName: 'MURRON_API_KEY'
+  };
+}
+
 async function callWorkflow(params: {
   type: WorkflowType;
   inputs: Record<string, unknown>;
   userId: string;
 }) {
-  const url = params.type === 'dayun' ? env.dayunApiUrl : env.murronApiUrl;
-  const key = params.type === 'dayun' ? env.dayunApiKey : env.murronApiKey;
-  if (!key) {
-    throw new Error(`${params.type === 'dayun' ? 'DAYUN_API_KEY' : 'MURRON_API_KEY'} is not configured`);
+  const workflow = resolveWorkflowConfig(params.type);
+  if (!workflow.key) {
+    throw new Error(`${workflow.missingKeyName} is not configured`);
   }
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), env.murronTimeoutMs);
 
   try {
-    const response = await fetch(url, {
+    const response = await fetch(workflow.url, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${key}`,
+        Authorization: `Bearer ${workflow.key}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
@@ -111,7 +134,7 @@ export async function runDayunWorkflow(params: {
     inputs: {
       bazi: params.bazi,
       current_luck_pillar: params.currentLuckPillar,
-      gender: params.gender === 'female' ? '女' : '男'
+      gender: params.gender === 'female' ? '\u5973' : '\u7537'
     }
   });
 }
