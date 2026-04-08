@@ -42,7 +42,8 @@ async function loadProfile(userId: string) {
 
 async function ensureCalculatedProfile(profile: UserProfile) {
   const calculated = calculateBaziFromProfile(profile);
-  const nextCurrentLuckPillar = normalizeText(profile.current_luck_pillar) || String((calculated as any).monthPillar || '');
+  const nextCurrentLuckPillar =
+    normalizeText(profile.current_luck_pillar) || normalizeText(calculated.currentLuckPillar);
   await profile.update({
     year_pillar: calculated.yearPillar,
     month_pillar: calculated.monthPillar,
@@ -123,8 +124,6 @@ function buildPublicBaziBundle(profile: UserProfile, calculated: Awaited<ReturnT
 function requireMetaphysicsProfile(profile: UserProfile | null) {
   if (!profile) throw new Error('profile not found');
   if (!profile.birth_date) throw new Error('birth_date is required');
-  if (!normalizeText(profile.birth_time)) throw new Error('birth_time is required');
-  if (!normalizeText(profile.birthplace)) throw new Error('birthplace is required');
   return profile;
 }
 

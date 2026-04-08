@@ -2,63 +2,63 @@ import { UserProfile } from '../../models';
 
 const { Solar } = require('lunar-javascript');
 
+const TIANGAN = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸'];
+const DIZHI = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'];
+
 const STEM_ELEMENTS: Record<string, string> = {
-  '\u7532': '\u6728',
-  '\u4e59': '\u6728',
-  '\u4e19': '\u706b',
-  '\u4e01': '\u706b',
-  '\u620a': '\u571f',
-  '\u5df1': '\u571f',
-  '\u5e9a': '\u91d1',
-  '\u8f9b': '\u91d1',
-  '\u58ec': '\u6c34',
-  '\u7678': '\u6c34'
+  甲: '木',
+  乙: '木',
+  丙: '火',
+  丁: '火',
+  戊: '土',
+  己: '土',
+  庚: '金',
+  辛: '金',
+  壬: '水',
+  癸: '水'
 };
 
 const BRANCH_ELEMENTS: Record<string, string> = {
-  '\u5b50': '\u6c34',
-  '\u4e11': '\u571f',
-  '\u5bc5': '\u6728',
-  '\u536f': '\u6728',
-  '\u8fb0': '\u571f',
-  '\u5df3': '\u706b',
-  '\u5348': '\u706b',
-  '\u672a': '\u571f',
-  '\u7533': '\u91d1',
-  '\u9149': '\u91d1',
-  '\u620c': '\u571f',
-  '\u4ea5': '\u6c34'
+  子: '水',
+  丑: '土',
+  寅: '木',
+  卯: '木',
+  辰: '土',
+  巳: '火',
+  午: '火',
+  未: '土',
+  申: '金',
+  酉: '金',
+  戌: '土',
+  亥: '水'
+};
+
+const STEM_YIN_YANG: Record<string, string> = {
+  甲: '阳',
+  乙: '阴',
+  丙: '阳',
+  丁: '阴',
+  戊: '阳',
+  己: '阴',
+  庚: '阳',
+  辛: '阴',
+  壬: '阳',
+  癸: '阴'
 };
 
 const HIDDEN_STEMS: Record<string, string[]> = {
-  '\u5b50': ['\u7678'],
-  '\u4e11': ['\u5df1', '\u8f9b', '\u7678'],
-  '\u5bc5': ['\u7532', '\u4e19', '\u620a'],
-  '\u536f': ['\u4e59'],
-  '\u8fb0': ['\u620a', '\u4e59', '\u7678'],
-  '\u5df3': ['\u4e19', '\u5e9a', '\u620a'],
-  '\u5348': ['\u4e01', '\u5df1'],
-  '\u672a': ['\u5df1', '\u4e01', '\u4e59'],
-  '\u7533': ['\u5e9a', '\u58ec', '\u620a'],
-  '\u9149': ['\u8f9b'],
-  '\u620c': ['\u620a', '\u8f9b', '\u4e01'],
-  '\u4ea5': ['\u58ec', '\u7532']
-};
-
-const ELEMENT_SUPPORTS: Record<string, string> = {
-  '\u6728': '\u6c34',
-  '\u706b': '\u6728',
-  '\u571f': '\u706b',
-  '\u91d1': '\u571f',
-  '\u6c34': '\u91d1'
-};
-
-const ELEMENT_CONTROLS: Record<string, string> = {
-  '\u6728': '\u571f',
-  '\u706b': '\u91d1',
-  '\u571f': '\u6c34',
-  '\u91d1': '\u6728',
-  '\u6c34': '\u706b'
+  子: ['癸'],
+  丑: ['己', '辛', '癸'],
+  寅: ['甲', '丙', '戊'],
+  卯: ['乙'],
+  辰: ['戊', '乙', '癸'],
+  巳: ['丙', '庚', '戊'],
+  午: ['丁', '己'],
+  未: ['己', '丁', '乙'],
+  申: ['庚', '壬', '戊'],
+  酉: ['辛'],
+  戌: ['戊', '辛', '丁'],
+  亥: ['壬', '甲']
 };
 
 export type CalculatedBazi = {
@@ -71,7 +71,12 @@ export type CalculatedBazi = {
   luckyElementsText: string;
   unluckyElementsText: string;
   report: string;
+  currentLuckPillar: string;
 };
+
+function normalizeGender(value: string | null | undefined) {
+  return value === 'female' ? 'female' : 'male';
+}
 
 function padTime(value: string) {
   const normalized = String(value || '').trim();
@@ -84,87 +89,149 @@ function padTime(value: string) {
   return '12:00';
 }
 
-function getMonthBranchWeight(monthBranch: string, dayElement: string) {
-  const monthElement = BRANCH_ELEMENTS[monthBranch] || '';
-  if (!monthElement) return 0;
-  if (monthElement === dayElement) return 2.2;
-  if (ELEMENT_SUPPORTS[dayElement] === monthElement) return 1.6;
-  if (ELEMENT_CONTROLS[monthElement] === dayElement) return -1.8;
-  if (ELEMENT_CONTROLS[dayElement] === monthElement) return -1.2;
-  return 0;
+function getResourceElement(element: string) {
+  const map: Record<string, string> = { 木: '水', 火: '木', 土: '火', 金: '土', 水: '金' };
+  return map[element] || '';
 }
 
-function getElementScore(dayElement: string, targetElement: string, weight: number) {
+function getOutputElement(element: string) {
+  const map: Record<string, string> = { 木: '火', 火: '土', 土: '金', 金: '水', 水: '木' };
+  return map[element] || '';
+}
+
+function getWealthElement(element: string) {
+  const map: Record<string, string> = { 木: '土', 火: '金', 土: '水', 金: '木', 水: '火' };
+  return map[element] || '';
+}
+
+function getOfficerElement(element: string) {
+  const map: Record<string, string> = { 木: '金', 火: '水', 土: '木', 金: '火', 水: '土' };
+  return map[element] || '';
+}
+
+function scoreElementRelation(dayElement: string, targetElement: string, weight: number) {
   if (!targetElement) return 0;
-  if (targetElement === dayElement) return 1 * weight;
-  if (ELEMENT_SUPPORTS[dayElement] === targetElement) return 0.8 * weight;
-  if (ELEMENT_SUPPORTS[targetElement] === dayElement) return -0.7 * weight;
-  if (ELEMENT_CONTROLS[dayElement] === targetElement) return -0.8 * weight;
-  if (ELEMENT_CONTROLS[targetElement] === dayElement) return -1 * weight;
+  if (targetElement === dayElement) return 1.0 * weight;
+  if (targetElement === getResourceElement(dayElement)) return 0.85 * weight;
+  if (targetElement === getOutputElement(dayElement)) return -0.65 * weight;
+  if (targetElement === getWealthElement(dayElement)) return -0.85 * weight;
+  if (targetElement === getOfficerElement(dayElement)) return -1.0 * weight;
   return 0;
 }
 
-function resolveBodyStrength(dayPillar: string, monthPillar: string, hourPillar: string, yearPillar: string) {
-  const dayElement = STEM_ELEMENTS[dayPillar.charAt(0)] || '';
-  const monthBranch = monthPillar.charAt(1) || '';
-  let score = 1.2;
-  score += getMonthBranchWeight(monthBranch, dayElement);
-
-  const stems = [yearPillar.charAt(0), monthPillar.charAt(0), hourPillar.charAt(0)];
-  stems.forEach((stem) => {
-    score += getElementScore(dayElement, STEM_ELEMENTS[stem] || '', 0.8);
-  });
-
-  const branches = [yearPillar.charAt(1), monthPillar.charAt(1), dayPillar.charAt(1), hourPillar.charAt(1)];
-  branches.forEach((branch, index) => {
-    score += getElementScore(dayElement, BRANCH_ELEMENTS[branch] || '', index === 1 ? 1.1 : 0.75);
-    (HIDDEN_STEMS[branch] || []).forEach((hiddenStem, hiddenIndex) => {
-      score += getElementScore(dayElement, STEM_ELEMENTS[hiddenStem] || '', Math.max(0.14, 0.4 - hiddenIndex * 0.08));
-    });
-  });
-
-  if (score >= 2.4) return '\u8eab\u65fa';
-  if (score <= -1.6) return '\u8eab\u5f31';
-  return '\u4e2d\u548c';
-}
-
-function resolveElementPair(dayElement: string, bodyStrength: string) {
-  const support = ELEMENT_SUPPORTS[dayElement] || '';
-  const controlTarget = ELEMENT_CONTROLS[dayElement] || '';
-  const controlledBy = Object.keys(ELEMENT_CONTROLS).find((key) => ELEMENT_CONTROLS[key] === dayElement) || '';
-
-  if (bodyStrength === '\u8eab\u65fa') {
+function resolveStrengthAndElements(
+  dayStem: string,
+  monthBranch: string,
+  allStems: string[],
+  allBranches: string[]
+) {
+  const dayElement = STEM_ELEMENTS[dayStem] || '';
+  if (!dayElement) {
     return {
-      lucky: [controlTarget, controlledBy].filter(Boolean).join('\uff0c'),
-      unlucky: [support, dayElement].filter(Boolean).join('\uff0c')
+      dayElement: '',
+      bodyStrength: '中和',
+      luckyElementsText: '',
+      unluckyElementsText: ''
     };
   }
 
-  if (bodyStrength === '\u8eab\u5f31') {
+  let score = 1.2;
+  score += scoreElementRelation(dayElement, BRANCH_ELEMENTS[monthBranch] || '', 1.6);
+
+  allStems.forEach((stem, index) => {
+    if (!stem || index === 2) return;
+    score += scoreElementRelation(dayElement, STEM_ELEMENTS[stem] || '', 1);
+  });
+
+  allBranches.forEach((branch, index) => {
+    if (!branch) return;
+    score += scoreElementRelation(dayElement, BRANCH_ELEMENTS[branch] || '', index === 1 ? 1.2 : 0.9);
+    const hidden = HIDDEN_STEMS[branch] || [];
+    hidden.forEach((stem, hiddenIndex) => {
+      const hiddenWeight = (index === 1 ? 0.5 : 0.35) - hiddenIndex * 0.08;
+      score += scoreElementRelation(dayElement, STEM_ELEMENTS[stem] || '', Math.max(hiddenWeight, 0.15));
+    });
+    if (hidden.includes(dayStem)) {
+      score += index === 2 ? 0.8 : 0.45;
+    }
+  });
+
+  let bodyStrength = '中和';
+  if (score >= 2.4) bodyStrength = '身旺';
+  else if (score <= -1.6) bodyStrength = '身弱';
+
+  const resourceElement = getResourceElement(dayElement);
+  const wealthElement = getWealthElement(dayElement);
+  const officerElement = getOfficerElement(dayElement);
+
+  if (bodyStrength === '身旺') {
     return {
-      lucky: [support, dayElement].filter(Boolean).join('\uff0c'),
-      unlucky: [controlTarget, controlledBy].filter(Boolean).join('\uff0c')
+      dayElement,
+      bodyStrength,
+      luckyElementsText: [wealthElement, officerElement].filter(Boolean).join('，'),
+      unluckyElementsText: [resourceElement, dayElement].filter(Boolean).join('，')
+    };
+  }
+
+  if (bodyStrength === '身弱') {
+    return {
+      dayElement,
+      bodyStrength,
+      luckyElementsText: [resourceElement, dayElement].filter(Boolean).join('，'),
+      unluckyElementsText: [wealthElement, officerElement].filter(Boolean).join('，')
     };
   }
 
   return {
-    lucky: [dayElement, support].filter(Boolean).join('\uff0c'),
-    unlucky: [controlTarget, controlledBy].filter(Boolean).join('\uff0c')
+    dayElement,
+    bodyStrength,
+    luckyElementsText: [dayElement, resourceElement].filter(Boolean).join('，'),
+    unluckyElementsText: [wealthElement, officerElement].filter(Boolean).join('，')
   };
 }
 
-function buildBaziReport(input: CalculatedBazi) {
+function getDayun(monthStem: string, monthBranch: string, gender: string) {
+  const isMale = gender === 'male';
+  const forward =
+    (isMale && ['甲', '丙', '戊', '庚', '壬'].includes(monthStem)) ||
+    (!isMale && ['乙', '丁', '己', '辛', '癸'].includes(monthStem));
+
+  let stemIndex = TIANGAN.indexOf(monthStem);
+  let branchIndex = DIZHI.indexOf(monthBranch);
+  const result: string[] = [];
+
+  for (let i = 0; i < 8; i += 1) {
+    stemIndex = forward ? (stemIndex + 1) % 10 : (stemIndex - 1 + 10) % 10;
+    branchIndex = forward ? (branchIndex + 1) % 12 : (branchIndex - 1 + 12) % 12;
+    result.push(`${TIANGAN[stemIndex]}${DIZHI[branchIndex]}`);
+  }
+
+  return result;
+}
+
+function buildBaziReport(input: CalculatedBazi, gender: string) {
+  const dayStem = input.dayPillar.charAt(0);
+  const dayYinYang = STEM_YIN_YANG[dayStem] || '';
+  const decadeLines = getDayun(input.monthPillar.charAt(0), input.monthPillar.charAt(1), gender)
+    .slice(0, 4)
+    .map((item, index) => `${8 + index * 10}-${17 + index * 10}岁：${item}`);
+
   return [
-    '\u3010\u516b\u5b57\u547d\u76d8\u3011',
-    `\u5e74\u67f1\uff1a${input.yearPillar}`,
-    `\u6708\u67f1\uff1a${input.monthPillar}`,
-    `\u65e5\u67f1\uff1a${input.dayPillar}`,
-    `\u65f6\u67f1\uff1a${input.hourPillar}`,
+    '【八字命盘】',
     '',
-    `\u65e5\u4e3b\uff1a${input.dayPillar.charAt(0)}\uff08${input.dayElement}\uff09`,
-    `\u547d\u5c40\uff1a${input.bodyStrength}`,
-    `\u559c\u7528\uff1a${input.luckyElementsText}`,
-    `\u5fcc\u795e\uff1a${input.unluckyElementsText}`
+    `年柱：${input.yearPillar}`,
+    `月柱：${input.monthPillar}`,
+    `日柱：${input.dayPillar}`,
+    `时柱：${input.hourPillar}`,
+    '',
+    '【五行】',
+    `日主：${dayStem}（${dayYinYang}${input.dayElement}）`,
+    `命局：${input.bodyStrength}`,
+    `喜用：${input.luckyElementsText}`,
+    `忌神：${input.unluckyElementsText}`,
+    '',
+    '【大运】',
+    ...decadeLines
   ].join('\n');
 }
 
@@ -175,8 +242,8 @@ export function buildWorkflowBaziString(params: {
   dayPillar: string;
   hourPillar: string;
 }) {
-  const genderLabel = params.gender === 'female' ? '\u5973\u5609\u5bbe' : '\u7537\u5609\u5bbe';
-  return `${genderLabel}\uff1a\u5e74\u67f1\uff1a${params.yearPillar}\uff0c\u6708\u67f1\uff1a${params.monthPillar}\u3002\u65e5\u67f1\uff1a${params.dayPillar}\uff0c\u65f6\u67f1\uff1a${params.hourPillar}`;
+  const genderLabel = normalizeGender(params.gender) === 'female' ? '女嘉宾' : '男嘉宾';
+  return `${genderLabel}：年柱：${params.yearPillar}，月柱：${params.monthPillar}。日柱：${params.dayPillar}，时柱：${params.hourPillar}`;
 }
 
 export function buildCompactBaziString(params: {
@@ -199,33 +266,42 @@ export function calculateBaziFromProfile(profile: UserProfile): CalculatedBazi {
   }
 
   const [hourText, minuteText] = padTime(profile.birth_time || '').split(':');
-  const year = birthDate.getUTCFullYear();
-  const month = birthDate.getUTCMonth() + 1;
-  const day = birthDate.getUTCDate();
-  const hour = Number(hourText || 12);
-  const minute = Number(minuteText || 0);
-  const solar = Solar.fromYmdHms(year, month, day, hour, minute, 0);
+  const solar = Solar.fromYmdHms(
+    birthDate.getUTCFullYear(),
+    birthDate.getUTCMonth() + 1,
+    birthDate.getUTCDate(),
+    Number(hourText || 12),
+    Number(minuteText || 0),
+    0
+  );
   const lunar = solar.getLunar();
 
   const yearPillar = String(lunar.getYearInGanZhi() || '');
   const monthPillar = String(lunar.getMonthInGanZhi() || '');
   const dayPillar = String(lunar.getDayInGanZhi() || '');
   const hourPillar = String(lunar.getTimeInGanZhi() || '');
-  const dayElement = STEM_ELEMENTS[dayPillar.charAt(0)] || '';
-  const bodyStrength = resolveBodyStrength(dayPillar, monthPillar, hourPillar, yearPillar);
-  const pairs = resolveElementPair(dayElement, bodyStrength);
+
+  const resolved = resolveStrengthAndElements(
+    dayPillar.charAt(0),
+    monthPillar.charAt(1),
+    [yearPillar.charAt(0), monthPillar.charAt(0), dayPillar.charAt(0), hourPillar.charAt(0)],
+    [yearPillar.charAt(1), monthPillar.charAt(1), dayPillar.charAt(1), hourPillar.charAt(1)]
+  );
+  const dayun = getDayun(monthPillar.charAt(0), monthPillar.charAt(1), normalizeGender(profile.gender));
 
   const payload: CalculatedBazi = {
     yearPillar,
     monthPillar,
     dayPillar,
     hourPillar,
-    dayElement,
-    bodyStrength,
-    luckyElementsText: pairs.lucky,
-    unluckyElementsText: pairs.unlucky,
-    report: ''
+    dayElement: resolved.dayElement,
+    bodyStrength: resolved.bodyStrength,
+    luckyElementsText: resolved.luckyElementsText,
+    unluckyElementsText: resolved.unluckyElementsText,
+    report: '',
+    currentLuckPillar: dayun[0] || ''
   };
-  payload.report = buildBaziReport(payload);
+
+  payload.report = buildBaziReport(payload, normalizeGender(profile.gender));
   return payload;
 }
